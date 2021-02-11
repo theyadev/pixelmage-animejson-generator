@@ -2,7 +2,7 @@ const fs = require("fs");
 const fetch = require("node-fetch");
 
 const animes = require("./animes.json");
-const usernames = ["Theya", "gnf5", "LlennW", "Endersteph"];
+const usernames = ["Theya", "gnf5", "LlennW", "Endersteph", "Volcanios", "Foussilin"];
 
 function loadAnime(user) {
   var query = `
