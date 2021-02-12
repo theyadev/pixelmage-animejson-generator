@@ -2,15 +2,22 @@ const fs = require("fs");
 const fetch = require("node-fetch");
 
 const animes = require("./animes.json");
-const usernames = ["Theya", "gnf5", "LlennW", "Endersteph", "Volcanios", "Foussilin"];
+const blacklist = require("./blacklist.json");
+const usernames = [
+  "Theya",
+  "gnf5",
+  "LlennW",
+  "Endersteph",
+  "Volcanios",
+  "Foussilin",
+];
 
-function loadAnime(user) {
-  var query = `
+const query = `
 query ($userName: String) {
   anime: MediaListCollection(userName: $userName, type: ANIME) {
     lists {
       entries {
-        media {
+        media {   
           bannerImage
           coverImage {
             extraLarge
@@ -20,25 +27,62 @@ query ($userName: String) {
             romaji
             english
           }
- format
- popularity
- status
+          format
+          popularity
+          status
           synonyms
         }
       }
     }
   }
 }
-
 `;
 
+function getAnimesFromList(list) {
+  list.entries.forEach((e) => {
+    // Skipping undesired animes.
+    if (blacklist.some((a) => a == e.media.title.romaji))
+      return
+    if (animes.some((a) => a.reponse == e.media.title.romaji)) return;
+
+    const format = e.media.format == null ? null : e.media.format.toLowerCase();
+    if (format == null) return;
+    if (format == "music" || format == "special" || format == "ova") return;
+
+    if (e.media.status == "NOT_YET_RELEASED") return;
+
+    // Proccess animes
+    if (e.media.title.english) e.media.synonyms.push(e.media.title.english);
+
+    if (e.media.popularity >= 100000) var difficulty = "easy";
+    else if (e.media.popularity >= 50000) var difficulty = "medium";
+    else var difficulty = "hard";
+
+    const regEx = /^[a-zA-ZÀ-ÖØ-öø-ÿ0-9!@#$%^&*()_+\-=\[\]{};'’`~:"\\|,.<>\/? ]+$/;
+    e.media.synonyms = e.media.synonyms.filter(
+      (y) => y != e.media.title.romaji && regEx.test(y)
+    );
+    const anime = {
+      image: e.media.coverImage.extraLarge,
+      reponse: e.media.title.romaji,
+      synonyms: e.media.synonyms,
+      difficulty: difficulty,
+      categorie: "Anime",
+    };
+    animes.push(anime);
+
+    console.log(anime.reponse + " Ajouté !");
+  });
+}
+
+function loadAnime(user) {
   // Define our query variables and values that will be used in the query request
-  var variables = {
+  let variables = {
     userName: user,
   };
 
   // Define the config we'll need for our Api request
-  var url = "https://graphql.anilist.co",
+  let url = "https://graphql.anilist.co",
     options = {
       method: "POST",
       headers: {
@@ -62,39 +106,7 @@ query ($userName: String) {
 
   function handleData(data) {
     console.log("------------------------ Anime List: " + user);
-    const minPopularity = 0;
-    /*
-  EASY: 80000 - 100000
-  NORMAL: 40000 - 60000
-  HARD: 0  
-  */
-    data.data.anime.lists.forEach((list) => {
-      list.entries.forEach((e) => {
-        if (!animes.some((a) => a.reponse == e.media.title.romaji)) {
-          if (e.media.format != null && e.media.popularity >= minPopularity && e.media.status != "NOT_YET_RELEASED") {
-            const format = e.media.format.toLowerCase();
-            if (format != "music" && format != "special" && format != "ova") {
-              if (e.media.title.english)
-                e.media.synonyms.push(e.media.title.english);
-              let difficulty;
-              if (e.media.popularity >= 100000) difficulty = "easy";
-              else if (e.media.popularity >= 50000) difficulty = "medium";
-              else difficulty = "hard";
-              const anime = {
-                image: e.media.coverImage.extraLarge,
-                reponse: e.media.title.romaji,
-                synonyms: e.media.synonyms,
-                difficulty: difficulty,
-                categorie: "Anime",
-              };
-              console.log(anime.reponse + " Ajouté !");
-              animes.push(anime);
-            }
-          }
-        }
-      });
-    });
-    console.log(animes.length);
+    data.data.anime.lists.forEach(getAnimesFromList);
     fs.writeFileSync("./animes.json", JSON.stringify(animes));
   }
 
@@ -102,6 +114,4 @@ query ($userName: String) {
     console.error(error);
   }
 }
-usernames.forEach((e) => {
-  loadAnime(e);
-});
+usernames.forEach(loadAnime);
